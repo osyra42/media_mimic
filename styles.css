@@ -1,19 +1,99 @@
-body {
-  background-color: #262626;
-  color: #dddddd;
+@font-face {
+  font-family: "Expo";
+  src: url("Exposition-4d49.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Pens";
+  src: url("OdaibaScriptDemoRegular-rggrK.otf") format("opentype");
 }
 
-h1 {
-  display: inline-block; /* Change 'inline' to 'inline-block' */
-  vertical-align: middle; /* Align the text vertically in the middle */
+body {
+  background-color: #888888;
+  color: #dddddd;
+  font-family: "Courier New", Courier, monospace;
+  font-weight: bold;
+  background-image: url("body_bg.png");
+  background-color: #690e0e;
+  background-blend-mode: multiply;
+}
+
+#header {
+  background-image: url("glare.png");
+  background-color: #edb40d;
+  background-blend-mode: multiply;
+
+  border: #fcdb4d solid 6px;
+  border-radius: 16px;
+  margin: 20px;
+  padding-left: 20px;
+}
+
+#header h1 {
+  display: inline-block;
+  vertical-align: middle;
   font-size: 36px;
   font-family: Arial, sans-serif;
   font-weight: bolder;
+  color: #a57110;
 }
 
-#icon {
-  display: inline-block; /* Change 'inline' to 'inline-block' */
-  vertical-align: middle; /* Align the image vertically in the middle */
+#header #icon {
+  display: inline-block;
+  vertical-align: middle;
   height: 56px;
   width: 56px;
+}
+
+#header p {
+  display: inline;
+  background-color: #a57110;
+  padding: 3px;
+  border-radius: 8px;
+  color: #e6b859;
+}
+
+.ribbon {
+  width: 100%;
+  height: 40px;
+  font-size: 30px;
+  color: #111111;
+  padding: 6px;
+  background-image: url("glare.png");
+  background-color: #edb40d;
+  background-blend-mode: multiply;
+  position: sticky;
+  top: 0px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  font-family: "Expo";
+}
+
+.tile {
+  display: inline-block;
+  height: 350px;
+  width: 200px;
+  margin: 5px;
+  border-radius: 8px;
+  background-image: url("tile_bg.png");
+  background-color: #333333;
+  background-blend-mode: multiply;
+}
+.tile img {
+  margin: 5px;
+  width: 190px;
+  height: 281px;
+  border-radius: 4px;
+}
+.tile p {
+  font-family: "Pens";
+  font-size: 18px;
+  margin: 0px;
+  padding: 5px;
+  box-sizing: border-box;
+  height: 60px;
+  width: 200px;
+  color: #252937;
+  font-weight: bold;
+  background-color: #888888cc;
+  border-radius: 8px 8px 0 0;
 }
