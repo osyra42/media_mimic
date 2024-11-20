@@ -1,0 +1,12 @@
+# basic application settings
+window_title = "Media Mimic"
+app_icon = "icon.png"
+media_path = "Z:/"
+
+# location of images
+poster_path = "posters"
+default_poster = "default.jpg"
+
+# ignore these things
+blacklisted_directories = ["$RECYCLE.BIN", "System Volume Information", "#media_mimic"]
+blacklisted_starting_characters = ["_"]

@@ -1,0 +1,6 @@
+settings.py
+posters/*
+
+
+venv
+__pycache__
