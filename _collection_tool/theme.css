@@ -1,0 +1,35 @@
+:root {
+  /* Coffee Base */
+  --espresso: #140d08;
+  --dark-mocha: #2a1e14;
+  --coffee-bean: #453024;
+
+  /* Cream & Milk */
+  --steamed-milk: #f5f5dc;
+  --light-cream: #f8e5c8;
+  --half-and-half: #d2b48c;
+
+  /* Derived shades */
+  --mocha-hover: #3a2a1c;
+  --bean-strong: #5c4332;
+  --bean-dim: #6b4f3a;
+
+  /* Semantic tokens */
+  --bg: var(--espresso);
+  --bg-elevated: var(--dark-mocha);
+  --bg-hover: var(--mocha-hover);
+  --bg-button: var(--dark-mocha);
+  --bg-button-active: var(--mocha-hover);
+
+  --border: var(--coffee-bean);
+  --border-strong: var(--bean-strong);
+
+  --text: var(--steamed-milk);
+  --text-strong: var(--light-cream);
+  --text-muted: var(--half-and-half);
+  --text-dim: var(--bean-dim);
+
+  --accent: var(--light-cream);
+  --accent-soft: rgba(248, 229, 200, 0.2);
+  --text-on-accent: var(--espresso);
+}

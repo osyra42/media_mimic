@@ -3,6 +3,9 @@ window_title = "Media Mimic"
 app_icon = "icon.png"
 media_path = "Z:/"
 
+# location of the VLC executable
+vlc_path = "C:/Program Files/VideoLAN/VLC/vlc.exe"
+
 # location of images
 poster_path = "posters"
 default_poster = "default.jpg"
@@ -10,3 +13,7 @@ default_poster = "default.jpg"
 # ignore these things
 blacklisted_directories = ["$RECYCLE.BIN", "System Volume Information", "#media_mimic"]
 blacklisted_starting_characters = ["_"]
+
+# OMDb API key for IMDb data (ratings, episodes, posters, runtime)
+# Get a free key at https://www.omdbapi.com/apikey.aspx
+omdb_api_key = ""

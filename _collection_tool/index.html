@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Collection Tool</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/x-icon" href="favicon.png" />
+    <link rel="stylesheet" href="theme.css" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="title-row">
+      <div>
+        <h1>📦 Collection Tool</h1>
+        <span id="version"></span>
+        <button class="clear-btn" onclick="clearData()">🗑️ Clear</button>
+      </div>
+      <div class="legend">
+        <span>🔵 Collection Not Attempted</span>
+        <span>🔴 Collection Failed</span>
+        <span>🟡 Collection in Progress</span>
+        <span>🟢 Collection Complete</span>
+        <span>🟣 Collection Confirmed</span>
+        <span>........................</span>
+        <span>⭐ Collection is Special</span>
+        <span>⚠️ Collection was Manual</span>
+        <span>⬛ Blank Placeholder</span>
+      </div>
+    </div>
+
+    <textarea id="input" rows="30" cols="80"></textarea>
+    <div class="button-bar">
+      <div id="status-counts" class="status-counts"></div>
+      <button type="button" onclick="addNewLine()">➕ Add New</button>
+      <button onclick="copy()">📋 Copy</button>
+    </div>
+
+    <div id="form"></div>
+
+    <script src="version.js"></script>
+    <script src="script.js"></script>
+    <script>
+      document.getElementById("version").textContent = "v" + version;
+    </script>
+  </body>
+</html>
