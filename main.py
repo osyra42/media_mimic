@@ -12,9 +12,10 @@ import psutil
 from PySide6.QtWidgets import (QApplication, QPushButton, QVBoxLayout, QHBoxLayout,
                                QWidget, QMessageBox, QLabel, QGridLayout, QScrollArea,
                                QLineEdit, QDialog, QFormLayout, QDialogButtonBox,
-                               QProgressBar, QGroupBox, QCheckBox)
+                               QProgressBar, QGroupBox, QCheckBox, QFrame)
 from PySide6.QtGui import QPixmap, QIcon
-from PySide6.QtCore import Qt, QThread, QObject, Signal, QTimer
+from PySide6.QtCore import (Qt, QThread, QObject, Signal, QTimer,
+                            QPropertyAnimation, QRect, QEasingCurve)
 
 # --- Local (support modules live in core/; put it on sys.path first) ---
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -34,42 +35,77 @@ def asset_path(relative):
 
 
 # --- Card geometry (kept uniform so the grid stays tidy) --------------------
-# Real trading cards are 2.5" x 3.5" (a 5:7 ratio, 0.714). We match that so
-# the cards read as proper cards instead of tall, cramped slivers.
-CARD_WIDTH = 250
-CARD_HEIGHT = 350               # 250:350 == 5:7, standard card ratio
-# Poster keeps its natural 2:3 shape but is height-capped so the title band
-# and stat footer both fit inside the 350px-tall card.
-POSTER_HEIGHT = 228
-POSTER_WIDTH = POSTER_HEIGHT * 2 // 3   # == 152, true 2:3 poster
-TITLE_BAND_HEIGHT = 46          # fixed 2-line height so long/short titles align
+# Layout: poster on the left, stats stacked on the right, description across
+# the bottom. A trading card TURNED SIDEWAYS: landscape 7:5 (1.4), so wider
+# than tall.
+CARD_WIDTH = 322
+CARD_HEIGHT = 230               # 322:230 == 7:5, a card on its side
 CARD_SPACING = 16               # breathing room between cards in the grid
 
-# Rarity accent by IMDb rating - a TCG-style scale from common to legendary.
-# Titles with no rating data stay a dull, non-distracting gray.
-NO_DATA_ACCENT = "#141414"   # near-black: missing / uncollected data
+# Poster fills the left column at a true 2:3 shape.
+POSTER_HEIGHT = 170
+POSTER_WIDTH = POSTER_HEIGHT * 2 // 3   # == 113, true 2:3 poster
 
-# (min_rating, color) checked high-to-low; first match wins.
-RARITY_TIERS = [
-    (9.0, "#e6b422"),   # legendary  - gold
-    (8.0, "#9b59b6"),   # epic       - purple
-    (7.0, "#3d6fb4"),   # rare       - blue
-    (6.0, "#3fa34d"),   # uncommon   - green
-    (0.0, "#6b6b6b"),   # common     - light gray (has data, low score)
-]
+# Expanded (zoomed) detail panel size.
+EXPANDED_WIDTH = 760
+EXPANDED_HEIGHT = 460
+
+# --- Theater theme -----------------------------------------------------------
+# The whole app dresses like a playhouse: deep velvet-curtain reds and stage
+# golds against a dim, warm near-black house.
+CURTAIN_RED = "#7c1420"       # deep velvet curtain - primary accent
+CURTAIN_RED_LIGHT = "#a01e2d"  # brighter red for hover/highlights
+STAGE_GOLD = "#d4af37"        # brass/gold trim, ratings, headings
+STAGE_GOLD_SOFT = "#e6c976"   # softer gold for secondary text
+HOUSE_DARK = "#1a1012"        # dim warm house (card/panel background)
+HOUSE_DARKER = "#120b0d"      # deeper backdrop
+PLAYBILL_CREAM = "#f0e6d2"    # warm off-white body text
+PLAYBILL_DIM = "#b9a99a"      # muted warm text for secondary info
 
 
-def rarity_accent(rating):
-    """Map an IMDb rating (float, or None/'' when missing) to a rarity color.
-    No data -> dull gray so uncollected cards don't distract."""
-    try:
-        value = float(rating)
-    except (TypeError, ValueError):
-        return NO_DATA_ACCENT
-    for threshold, color in RARITY_TIERS:
-        if value >= threshold:
-            return color
-    return NO_DATA_ACCENT
+def completeness_badge(has_data, media_type, audit):
+    """Return (icon, color, tooltip) for the poster corner badge. Every card
+    shows exactly one state, and the icon only claims what we can prove:
+      ✗ no data · ● completeness unknown · ✔ verified complete · ⬆ upgrades."""
+    if not has_data:
+        return ("✗", "#c94a4a", "No data - not fetched yet")
+    if audit:
+        on_disk = audit.get("on_disk", 0)
+        total = audit.get("imdb_total", 0)
+        missing = audit.get("missing_count", 0)
+        if audit.get("complete"):
+            return ("✔", "#4caf50", f"Complete · {on_disk}/{total} episodes")
+        if missing > 0:
+            return ("⬆", STAGE_GOLD, f"{missing} more available · {on_disk}/{total} episodes")
+    # Has metadata but no episode audit (movie, or episodes not fetched).
+    # Assume complete: most titles are, and we don't want the badge to depend
+    # on whether episode data was ever fetched. Gold ⬆ only shows when we have
+    # episode data that actually proves something is missing.
+    return ("✔", "#4caf50", "Data on file")
+
+
+def truncate(text, limit):
+    """Trim `text` to `limit` chars, adding an ellipsis when cut."""
+    text = (text or "").strip()
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 1)].rstrip() + "…"
+
+
+def load_poster(title, target_w, target_h):
+    """Return a QPixmap for a title's poster scaled to fit, falling back to the
+    default poster. Never returns null unless both files are missing."""
+    path = asset_path(settings.poster_path) / f"{title}.jpg"
+    pixmap = QPixmap(str(path))
+    if pixmap.isNull():
+        pixmap = QPixmap(str(asset_path(settings.default_poster)))
+    if pixmap.isNull():
+        return pixmap
+    return pixmap.scaled(
+        target_w, target_h,
+        Qt.AspectRatioMode.KeepAspectRatio,
+        Qt.TransformationMode.SmoothTransformation,
+    )
 
 
 class FetchWorker(QObject):
@@ -175,8 +211,10 @@ class SplashOverlay(QWidget):
 
     def __init__(self, parent, total):
         super().__init__(parent)
-        # Slight gray, fully opaque backdrop that covers the whole parent.
-        self.setStyleSheet("background: #3c3c3c;")
+        # Warm dim "house" backdrop covering the whole parent.
+        self.setObjectName("splash")
+        self.setStyleSheet(f"QWidget#splash {{ background: {HOUSE_DARKER}; }}")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setAutoFillBackground(True)
 
         v = QVBoxLayout(self)
@@ -185,7 +223,7 @@ class SplashOverlay(QWidget):
 
         heading = QLabel(settings.window_title)
         heading.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        heading.setStyleSheet("color: #ffffff; font-size: 22px; font-weight: bold;")
+        heading.setStyleSheet(f"color: {STAGE_GOLD}; font-size: 24px; font-weight: bold;")
         v.addWidget(heading)
 
         self.progress = QProgressBar()
@@ -194,20 +232,20 @@ class SplashOverlay(QWidget):
         self.progress.setValue(0)
         self.progress.setTextVisible(False)
         self.progress.setStyleSheet(
-            "QProgressBar { background: #2a2a2a; border: none; border-radius: 4px;"
-            " height: 14px; }"
-            " QProgressBar::chunk { background: #6ea0ff; border-radius: 4px; }"
+            f"QProgressBar {{ background: {HOUSE_DARK}; border: 1px solid {CURTAIN_RED};"
+            f" border-radius: 4px; height: 14px; }}"
+            f" QProgressBar::chunk {{ background: {CURTAIN_RED}; border-radius: 3px; }}"
         )
         v.addWidget(self.progress, alignment=Qt.AlignmentFlag.AlignCenter)
 
         self.category_label = QLabel("")
         self.category_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.category_label.setStyleSheet("color: #e0e0e0; font-size: 14px; font-weight: bold;")
+        self.category_label.setStyleSheet(f"color: {PLAYBILL_CREAM}; font-size: 14px; font-weight: bold;")
         v.addWidget(self.category_label)
 
         self.title_label = QLabel("")
         self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.title_label.setStyleSheet("color: #b0b0b0; font-size: 11px;")
+        self.title_label.setStyleSheet(f"color: {PLAYBILL_DIM}; font-size: 11px;")
         v.addWidget(self.title_label)
 
         self._count = 0
@@ -228,6 +266,198 @@ class SplashOverlay(QWidget):
     def close(self):
         self.hide()
         self.deleteLater()
+
+
+class DetailOverlay(QWidget):
+    """A large, centered detail panel that zooms in from a card's position to
+    show all data plus a Play button. Clicking the dimmed backdrop or Close
+    zooms it back and removes it."""
+
+    def __init__(self, parent, start_rect, data, on_play, on_refresh=None):
+        super().__init__(parent)
+        self._on_play = on_play
+        self._on_refresh = on_refresh
+        self.setGeometry(parent.rect())            # cover the whole window
+
+        # Dim backdrop; clicking it closes. Scope to this widget so the style
+        # does not cascade into the panel and its labels.
+        self.setObjectName("detailBackdrop")
+        self.setStyleSheet("QWidget#detailBackdrop { background: rgba(0, 0, 0, 160); }")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+
+        # The panel that actually grows from the card to center. The selector
+        # is scoped to QFrame so the border doesn't cascade to child labels.
+        self.panel = QFrame(self)
+        self.panel.setObjectName("detailPanel")
+        self.panel.setStyleSheet(
+            f"QFrame#detailPanel {{ background: {HOUSE_DARK};"
+            f" border: 3px solid {data['accent']}; border-radius: 12px; }}"
+        )
+        self._build_panel_contents(data)
+
+        # Target: centered EXPANDED_WIDTH x EXPANDED_HEIGHT.
+        cx = (parent.width() - EXPANDED_WIDTH) // 2
+        cy = (parent.height() - EXPANDED_HEIGHT) // 2
+        self._end_rect = QRect(cx, max(20, cy), EXPANDED_WIDTH, EXPANDED_HEIGHT)
+        self._start_rect = start_rect
+
+        self.show()
+        self.raise_()
+        self._animate(start_rect, self._end_rect)
+
+    def _build_panel_contents(self, data):
+        lay = QVBoxLayout(self.panel)
+        lay.setContentsMargins(20, 20, 20, 20)
+        lay.setSpacing(12)
+
+        # Header row: title (truncated) + Close button.
+        header = QHBoxLayout()
+        title = QLabel(truncate(data["title"], 60))
+        title.setStyleSheet(
+            f"color: {STAGE_GOLD}; font-size: 24px; font-weight: bold;"
+            f" border-bottom: 4px solid {data['accent']};"
+        )
+        header.addWidget(title)
+        header.addStretch()
+        close_btn = QPushButton("✕")
+        close_btn.setFixedSize(34, 34)
+        close_btn.setStyleSheet(f"color: {PLAYBILL_DIM}; font-size: 16px; border: none;")
+        close_btn.clicked.connect(self.close_zoom)
+        header.addWidget(close_btn)
+        lay.addLayout(header)
+
+        # Body mirrors the compact card, scaled up: poster on the left
+        # (vertically centered), a right column with the metadata, then the
+        # description below it, then Play at the bottom.
+        body = QHBoxLayout()
+        body.setSpacing(24)
+
+        poster = QLabel()
+        poster.setFixedSize(240, 360)
+        poster.setStyleSheet("background: #000; border-radius: 6px;")
+        poster.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        pm = load_poster(data["poster_title"], 240, 360)
+        if not pm.isNull():
+            poster.setPixmap(pm)
+        body.addWidget(poster, alignment=Qt.AlignmentFlag.AlignVCenter)
+
+        info = data["info"]
+        right = QVBoxLayout()
+        right.setSpacing(8)
+        right.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        def stat(text, color=PLAYBILL_CREAM, size=14, bold=False):
+            lbl = QLabel(text)
+            weight = "bold" if bold else "normal"
+            lbl.setStyleSheet(f"color: {color}; font-size: {size}px; font-weight: {weight};")
+            lbl.setWordWrap(True)
+            right.addWidget(lbl)
+
+        rating = library.get_rating(info)
+        stat(f"⭐ {rating}" if rating else "⭐ —", STAGE_GOLD, 18, True)
+        stat(data["type_detail"] or "—")
+        if info.get("Year"):
+            stat(f"Year: {info['Year']}")
+        if info.get("Rated") and info["Rated"] != "N/A":
+            stat(f"Rated: {info['Rated']}")
+        if data["watch"]:
+            stat(f"⏱ {data['watch']}", STAGE_GOLD_SOFT)
+        if info.get("Genre") and info["Genre"] != "N/A":
+            stat(truncate(info["Genre"], 60), PLAYBILL_DIM, 12)
+        if info.get("Actors") and info["Actors"] != "N/A":
+            stat("Cast: " + truncate(info["Actors"], 70), PLAYBILL_DIM, 12)
+
+        # Description directly below the metadata (same as the card).
+        plot = info.get("Plot")
+        desc = QLabel(truncate(plot, 400) if plot and plot != "N/A" else "No description available.")
+        desc.setWordWrap(True)
+        desc.setStyleSheet(f"color: {PLAYBILL_CREAM}; font-size: 13px; padding-top: 6px;")
+        right.addWidget(desc)
+
+        right.addStretch()
+
+        # Big Play button, with a small refresh button tacked on the end to
+        # re-fetch just this title's data into the cache.
+        action_row = QHBoxLayout()
+        action_row.setSpacing(8)
+        play = QPushButton("▶  Play")
+        play.setCursor(Qt.CursorShape.PointingHandCursor)
+        play.setStyleSheet(
+            f"QPushButton {{ background: {CURTAIN_RED}; color: {STAGE_GOLD}; font-size: 16px;"
+            f" font-weight: bold; padding: 10px; border-radius: 8px; }}"
+            f" QPushButton:hover {{ background: {CURTAIN_RED_LIGHT}; }}"
+        )
+        play.clicked.connect(self._play)
+        action_row.addWidget(play)
+
+        self.refresh_btn = QPushButton("⟳")
+        self.refresh_btn.setToolTip("Re-fetch this title's data")
+        self.refresh_btn.setFixedWidth(48)
+        self.refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.refresh_btn.setStyleSheet(
+            f"QPushButton {{ background: {HOUSE_DARKER}; color: {STAGE_GOLD};"
+            f" font-size: 18px; padding: 10px; border: 1px solid {CURTAIN_RED};"
+            f" border-radius: 8px; }}"
+            f" QPushButton:hover {{ background: {CURTAIN_RED}; }}"
+        )
+        self.refresh_btn.clicked.connect(self._refresh)
+        action_row.addWidget(self.refresh_btn)
+        right.addLayout(action_row)
+
+        body.addLayout(right)
+        lay.addLayout(body)
+
+    def _animate(self, start, end):
+        self.panel.setGeometry(start)
+        self._anim = QPropertyAnimation(self.panel, b"geometry")
+        self._anim.setDuration(220)
+        self._anim.setStartValue(start)
+        self._anim.setEndValue(end)
+        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._anim.start()
+
+    def _play(self):
+        if self._on_play:
+            self._on_play()
+        self.close_zoom()
+
+    def _refresh(self):
+        # Re-fetch this one title's data; the callback reports success/failure.
+        if not self._on_refresh:
+            return
+        self.refresh_btn.setEnabled(False)
+        self.refresh_btn.setText("…")
+        QApplication.processEvents()
+        ok = False
+        try:
+            ok = self._on_refresh()
+        finally:
+            self.refresh_btn.setText("✓" if ok else "⟳")
+            self.refresh_btn.setEnabled(True)
+
+    def close_zoom(self):
+        # Zoom back toward the origin card, then remove.
+        self._anim = QPropertyAnimation(self.panel, b"geometry")
+        self._anim.setDuration(180)
+        self._anim.setStartValue(self.panel.geometry())
+        self._anim.setEndValue(self._start_rect)
+        self._anim.setEasingCurve(QEasingCurve.Type.InCubic)
+        self._anim.finished.connect(self._finish_close)
+        self._anim.start()
+
+    def _finish_close(self):
+        self.hide()
+        self.deleteLater()
+
+    def mousePressEvent(self, event):
+        # Click outside the panel closes it.
+        if not self.panel.geometry().contains(event.pos()):
+            self.close_zoom()
+
+    def resizeEvent(self, event):
+        self.setGeometry(self.parent().rect())
+        super().resizeEvent(event)
+
 
 class SettingsDialog(QDialog):
     """A modal showing every setting from settings.py as a text box. Saving
@@ -528,6 +758,8 @@ class MediaMimicApp(QWidget):
 
         # Store category data
         self.categories = []
+        self._cards = {}         # (title, category) -> card button, for zoom
+        self._detail = None      # the currently-open expanded detail overlay
 
         # Connect the resize event
         self.resizeEvent = self.on_resize
@@ -555,7 +787,10 @@ class MediaMimicApp(QWidget):
                 # Create a header label for the category
                 header_label = QLabel(category, self)
                 header_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
-                header_label.setStyleSheet("font-size: 20px; font-weight: bold;")
+                header_label.setStyleSheet(
+                    f"color: {STAGE_GOLD}; font-size: 20px; font-weight: bold;"
+                    f" border-bottom: 2px solid {CURTAIN_RED}; padding-bottom: 3px;"
+                )
                 self.main_layout.addWidget(header_label)
 
                 # Create a grid layout for this category, left-aligned so the
@@ -576,6 +811,7 @@ class MediaMimicApp(QWidget):
                     splash.update(category, title)
                     button = self._build_card(title, category)
                     buttons.append(button)
+                    self._cards[(title, category)] = button
 
                 # Store category data (header + grid + its buttons) so the
                 # search filter can show/hide titles and empty categories.
@@ -598,123 +834,200 @@ class MediaMimicApp(QWidget):
         self.search_query = text.strip().lower()
         self.adjust_grid_layout()
 
-    def _build_card(self, title, category):
-        """Build one trading-card-style button for a title. Cards are a fixed
-        size; the title band is fixed-height (2 lines max, elided) so cards
-        stay uniform regardless of title length."""
-        # Read cached data using the same type hint the fetch used, so the
-        # card shows the corrected entry rather than an old mis-typed one.
+    def _card_info(self, title, category):
+        """Gather the display data for a title in one place."""
         info = omdb_client.cached_info(title, kind=library.category_kind(category)) or {}
         media_type = (info.get("Type") or "").lower()
-        # Rarity color comes from the IMDb rating; no rating -> dull gray.
-        accent = rarity_accent(library.get_rating(info))
+        title_path = os.path.join(self.directory_path, category, title)
+        minutes = None
+        audit = None
+        if info:
+            try:
+                minutes = library.total_watch_minutes(info, title_path)
+            except Exception:
+                minutes = None
+            try:
+                # cached_only so building the grid never hits the network.
+                audit = library.episode_audit(info, title_path, cached_only=True)
+            except Exception:
+                audit = None
+        return info, media_type, minutes, audit
+
+    def _type_detail(self, info, media_type):
+        if media_type == "series":
+            seasons = info.get("totalSeasons")
+            return f"TV · {seasons} seasons" if seasons and seasons != "N/A" else "TV"
+        if media_type == "movie":
+            return f"Movie · {info.get('Runtime', '')}".strip(" ·")
+        return info.get("Runtime", "") or ""
+
+    def _build_card(self, title, category):
+        """Build one card: poster on the left, stats on the right, a short
+        description across the bottom. Fixed size; long text is truncated."""
+        info, media_type, minutes, audit = self._card_info(title, category)
+        rating = library.get_rating(info)
+
+        # Cards with no fetched data stay near-black (curtain in the dark);
+        # cards with data wear the velvet-red trim.
+        has_data = bool(info)
+        card_bg = HOUSE_DARK if has_data else HOUSE_DARKER
+        card_border = CURTAIN_RED if has_data else "#000000"
+        title_accent = CURTAIN_RED if has_data else "#000000"
 
         button = QPushButton(self)
-        button.clicked.connect(self.create_button_click_handler(title, category))
+        button.clicked.connect(lambda _=False, t=title, c=category: self.expand_card(t, c))
         button.setFixedSize(CARD_WIDTH, CARD_HEIGHT)
+        button.setProperty("category", category)
         button.setProperty("title", title)  # for search filtering
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         button.setStyleSheet(f"""
             QPushButton {{
-                background: #1f1f1f;
-                border: 1px solid #000;
+                background: {card_bg};
+                border: 1px solid {card_border};
                 border-radius: 10px;
-                padding: 0px;
             }}
-            QPushButton:hover {{
-                border: 2px solid {accent};
-            }}
+            QPushButton:hover {{ border: 2px solid {STAGE_GOLD}; }}
         """)
 
-        card = QVBoxLayout(button)
-        card.setContentsMargins(6, 6, 6, 6)
-        card.setSpacing(4)
-
-        # --- Title band (top, bold, larger, up to 2 lines, elided) ---------
-        display_title = info.get("Title") or title
-        title_label = QLabel(display_title)
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setWordWrap(True)
-        title_label.setFixedHeight(TITLE_BAND_HEIGHT)
-        title_label.setStyleSheet(f"""
-            color: #ffffff;
-            font-size: 14px;
-            font-weight: bold;
-            background: {accent};
-            border-radius: 6px;
-            padding: 2px 4px;
-        """)
-        card.addWidget(title_label)
-
-        # --- Poster art ----------------------------------------------------
-        image_path = asset_path(settings.poster_path) / f"{title}.jpg"
-        pixmap = QPixmap(str(image_path))
-        if pixmap.isNull():
-            pixmap = QPixmap(str(asset_path(settings.default_poster)))
+        # Poster on the left (vertically centered), a right column holding the
+        # metadata and, below it, the description.
+        row = QHBoxLayout(button)
+        row.setContentsMargins(8, 8, 8, 8)
+        row.setSpacing(10)
 
         poster = QLabel()
         poster.setFixedSize(POSTER_WIDTH, POSTER_HEIGHT)
         poster.setAlignment(Qt.AlignmentFlag.AlignCenter)
         poster.setStyleSheet("background: #000; border-radius: 4px;")
+        pixmap = load_poster(title, POSTER_WIDTH, POSTER_HEIGHT)
         if not pixmap.isNull():
-            poster.setPixmap(pixmap.scaled(
-                POSTER_WIDTH, POSTER_HEIGHT,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            ))
-        card.addWidget(poster, alignment=Qt.AlignmentFlag.AlignCenter)
+            poster.setPixmap(pixmap)
 
-        # --- Stat footer (easy-to-read enriched data) ----------------------
-        card.addWidget(self._build_stat_footer(info, media_type))
+        # Status badge overlaid on the poster's lower-left corner: always shown
+        # (✔ complete · ⬆ upgrades available · ✗ no data).
+        icon, color, tip = completeness_badge(has_data, media_type, audit)
+        badge_label = QLabel(icon, poster)
+        badge_label.setToolTip(tip)
+        badge_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        badge_label.setFixedSize(26, 26)
+        badge_label.setStyleSheet(
+            f"QLabel {{ color: {color}; font-size: 16px; font-weight: bold;"
+            " background: rgba(0, 0, 0, 190); border-radius: 13px; }"
+        )
+        badge_label.move(4, POSTER_HEIGHT - 26 - 4)  # lower-left corner
+        badge_label.raise_()
+
+        # Center the poster vertically within the card's full height.
+        row.addWidget(poster, alignment=Qt.AlignmentFlag.AlignVCenter)
+
+        stats = QVBoxLayout()
+        stats.setSpacing(4)
+        stats.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        title_label = QLabel(truncate(info.get("Title") or title, 34))
+        title_label.setWordWrap(True)
+        title_label.setStyleSheet(
+            f"color: {STAGE_GOLD}; font-size: 15px; font-weight: bold;"
+            f" border-bottom: 3px solid {title_accent}; padding-bottom: 2px;"
+        )
+        stats.addWidget(title_label)
+
+        star = QLabel(f"⭐ {rating}" if rating else "⭐ —")
+        star.setStyleSheet(f"color: {STAGE_GOLD}; font-weight: bold; font-size: 14px;")
+        stats.addWidget(star)
+
+        year = QLabel(info.get("Year") or "—")
+        year.setStyleSheet(f"color: {PLAYBILL_DIM}; font-size: 12px;")
+        stats.addWidget(year)
+
+        detail = QLabel(truncate(self._type_detail(info, media_type), 24) or "—")
+        detail.setStyleSheet(f"color: {PLAYBILL_CREAM}; font-size: 12px;")
+        stats.addWidget(detail)
+
+        if minutes:
+            watch = QLabel(f"⏱ {library.format_duration(minutes)}")
+            watch.setStyleSheet(f"color: {STAGE_GOLD_SOFT}; font-size: 12px;")
+            stats.addWidget(watch)
+
+        genre = QLabel(truncate(info.get("Genre") or "", 26) or "—")
+        genre.setStyleSheet(f"color: {PLAYBILL_DIM}; font-size: 11px;")
+        stats.addWidget(genre)
+
+        # Description sits below the metadata, so the poster stays centered.
+        plot = info.get("Plot")
+        desc = QLabel(truncate(plot, 130) if plot and plot != "N/A" else "")
+        desc.setWordWrap(True)
+        desc.setStyleSheet(f"color: {PLAYBILL_DIM}; font-size: 10px;")
+        stats.addWidget(desc)
+
+        stats.addStretch()
+        row.addLayout(stats)
 
         return button
-
-    def _build_stat_footer(self, info, media_type):
-        """A compact, readable stat block from cached OMDb data. Falls back
-        gracefully when a title hasn't been enriched yet."""
-        footer = QWidget()
-        v = QVBoxLayout(footer)
-        v.setContentsMargins(2, 0, 2, 0)
-        v.setSpacing(1)
-
-        # Top line: star rating + year, on opposite ends.
-        rating = library.get_rating(info)
-        year = info.get("Year") or ""
-        top = QHBoxLayout()
-        top.setContentsMargins(0, 0, 0, 0)
-        star = QLabel(f"⭐ {rating}" if rating else "⭐ —")
-        star.setStyleSheet("color: #ffd351; font-weight: bold; font-size: 12px;")
-        year_label = QLabel(year)
-        year_label.setStyleSheet("color: #bbbbbb; font-size: 12px;")
-        top.addWidget(star)
-        top.addStretch()
-        top.addWidget(year_label)
-        v.addLayout(top)
-
-        # Middle line: type badge + runtime / seasons.
-        if media_type == "series":
-            seasons = info.get("totalSeasons")
-            detail = f"TV · {seasons} seasons" if seasons and seasons != "N/A" else "TV"
-        elif media_type == "movie":
-            detail = f"Movie · {info.get('Runtime', '')}".strip(" ·")
-        else:
-            detail = info.get("Runtime", "") or ""
-        detail_label = QLabel(detail or "—")
-        detail_label.setStyleSheet("color: #dddddd; font-size: 11px;")
-        v.addWidget(detail_label)
-
-        # Bottom line: genre, elided to one line.
-        genre = info.get("Genre") or ""
-        genre_label = QLabel(genre or "—")
-        genre_label.setStyleSheet("color: #999999; font-size: 10px;")
-        v.addWidget(genre_label)
-
-        return footer
 
     def create_button_click_handler(self, title, category):
         def button_click_handler():
             self.open_video(title, category)
         return button_click_handler
+
+    def expand_card(self, title, category):
+        """Zoom the clicked card into a large centered detail panel."""
+        if self._detail is not None:
+            return  # one open at a time
+
+        info, media_type, minutes, audit = self._card_info(title, category)
+        card = self._cards.get((title, category))
+        # Start rect = the card's geometry mapped into this window's coords.
+        if card is not None:
+            top_left = card.mapTo(self, card.rect().topLeft())
+            start_rect = QRect(top_left, card.size())
+        else:
+            start_rect = QRect(self.width() // 2, self.height() // 2, 10, 10)
+
+        data = {
+            "title": info.get("Title") or title,
+            "poster_title": title,
+            "accent": CURTAIN_RED,
+            "info": info,
+            "type_detail": self._type_detail(info, media_type),
+            "watch": library.format_duration(minutes) if minutes else None,
+        }
+
+        self._detail = DetailOverlay(
+            self, start_rect, data,
+            on_play=lambda: self.open_video(title, category),
+            on_refresh=lambda: self._refresh_title(title, category),
+        )
+        # Clear our handle when the overlay is destroyed.
+        self._detail.destroyed.connect(self._on_detail_closed)
+
+    def _on_detail_closed(self):
+        self._detail = None
+
+    def _refresh_title(self, title, category):
+        """Force-refetch a single title's data into the cache and rebuild its
+        card in place. Returns True on success. Runs on the UI thread - it's
+        one title, so the brief pause is acceptable."""
+        try:
+            omdb_client.lookup_title(
+                title, kind=library.category_kind(category), force=True,
+            )
+        except Exception:
+            return False
+
+        # Rebuild the card so the new data (rating, completeness, etc.) shows.
+        old = self._cards.get((title, category))
+        if old is not None:
+            new = self._build_card(title, category)
+            self._cards[(title, category)] = new
+            for i, (header, grid, buttons) in enumerate(self.categories):
+                if old in buttons:
+                    buttons[buttons.index(old)] = new
+                    break
+            old.setParent(None)
+            old.deleteLater()
+            self.adjust_grid_layout()
+        return True
 
     def _matches_search(self, title):
         # Empty query matches everything; otherwise case-insensitive substring.

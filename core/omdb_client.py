@@ -131,23 +131,29 @@ def cached_info(name, kind=None):
     return _cache.get(f"t::{title}::{kind or ''}")
 
 
-def get_season(imdb_id, season):
-    """Return the episode list for one season of a series."""
-    params = {"i": imdb_id, "Season": str(season)}
+def get_season(imdb_id, season, cached_only=False):
+    """Return the episode list for one season of a series. With cached_only,
+    return None instead of making a network call when it isn't cached."""
     cache_key = f"s::{imdb_id}::{season}"
+    if cached_only:
+        return _cache.get(cache_key)
+    params = {"i": imdb_id, "Season": str(season)}
     return _request(params, cache_key)
 
 
-def get_all_episodes(imdb_id, total_seasons):
+def get_all_episodes(imdb_id, total_seasons, cached_only=False):
     """
     Return a flat list of episodes across all seasons:
     [{'season': 1, 'episode': 1, 'title': '...', 'imdbID': '...'}, ...]
+    With cached_only, only already-cached seasons contribute (no network).
     """
     episodes = []
     for s in range(1, int(total_seasons) + 1):
         try:
-            data = get_season(imdb_id, s)
+            data = get_season(imdb_id, s, cached_only=cached_only)
         except OMDbError:
+            continue
+        if data is None:
             continue
         for ep in data.get("Episodes", []):
             episodes.append(

@@ -154,7 +154,7 @@ def format_duration(minutes):
 
 # ----- Features 1-3: episode list + missing audit ----------------------------
 
-def episode_audit(info, title_path):
+def episode_audit(info, title_path, cached_only=False):
     """
     For a series: pull the full episode list from IMDb (Feature 1) and compare
     against the drive by TOTAL COUNT (Feature 2), flagging how many appear to be
@@ -173,9 +173,11 @@ def episode_audit(info, title_path):
     if not total_seasons or total_seasons == "N/A":
         return None
 
-    imdb_eps = omdb_client.get_all_episodes(info["imdbID"], total_seasons)
+    imdb_eps = omdb_client.get_all_episodes(info["imdbID"], total_seasons, cached_only=cached_only)
     # Exclude "episode 0" specials so counts line up with typical rips.
     imdb_total = len([e for e in imdb_eps if e["episode"] > 0])
+    if cached_only and imdb_total == 0:
+        return None  # no cached season data -> can't judge completeness
     on_disk = len(video_files(title_path))
     missing_count = max(0, imdb_total - on_disk)
     return {
