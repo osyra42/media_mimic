@@ -1,17 +1,35 @@
 @echo off
-title Media Mimic
+REM === Variables ===
+set "TITLE=Media Mimic"
+set "ENTRY=main.py"
+set "ARGS="
+set "PYEXE=venv\Scripts\pythonw.exe"
+set "PYCHECK=venv\Scripts\python.exe"
 
-REM Change to the directory where the batch file is located
+title %TITLE%
 cd /d "%~dp0"
 
-REM Activate the virtual environment
-call venv\Scripts\activate
+REM === Requirements ===
+REM Runtime check: the project venv must exist.
+if not exist "%PYCHECK%" (
+    echo The Python virtual environment is missing.
+    echo Create it with: python -m venv venv ^&^& venv\Scripts\pip install -r requirements.txt
+    pause
+    exit /b 1
+)
 
-REM Run the Python script using a relative path
-python main.py
+REM Dependency check: all requirements must be installed and consistent.
+"%PYCHECK%" -m pip check >nul 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    echo Missing Python dependencies. Run: venv\Scripts\pip install -r requirements.txt
+    pause
+    exit /b 1
+)
 
-REM Deactivate the virtual environment
-call venv\Scripts\deactivate
+REM === Script ===
+REM Launch windowless and detached so no console lingers behind the app.
+start "" "%PYEXE%" "%ENTRY%" %ARGS%
 
-REM Pause to keep the window open
-pause
+REM === Execution ===
+REM Checks passed and the app is launched - close the launcher immediately.
+exit
