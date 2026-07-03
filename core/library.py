@@ -11,6 +11,7 @@ from pathlib import Path
 
 import settings
 import omdb_client
+from paths import project_path
 
 VIDEO_EXTS = {".mkv", ".mp4", ".avi", ".m4v", ".mov", ".wmv", ".flv", ".webm", ".mpg", ".mpeg", ".ts"}
 
@@ -26,6 +27,26 @@ def _is_listed(name):
         not name.startswith(tuple(settings.blacklisted_starting_characters))
         and name not in settings.blacklisted_directories
     )
+
+
+# Category-name keywords -> OMDb type. Used as a search hint so a show folder
+# doesn't match a same-named movie (and vice versa), which was the main cause
+# of misclassified data.
+_MOVIE_HINTS = ("movie", "film", "ghibli", "cinema")
+_SERIES_HINTS = ("cartoon", "anime", "series", "show", "tv", "toon")
+
+
+def category_kind(category):
+    """Infer 'movie' or 'series' from a category folder name, or None if the
+    name gives no clear signal. 'toon' maps to series, but the 'toon' inside
+    'Movies [TOON]' must not override the leading 'movies' -> so movie hints
+    are checked first."""
+    name = category.lower()
+    if any(h in name for h in _MOVIE_HINTS):
+        return "movie"
+    if any(h in name for h in _SERIES_HINTS):
+        return "series"
+    return None
 
 
 def scan_titles():
@@ -74,13 +95,14 @@ def local_episodes(title_path):
 
 # ----- Feature 6: poster from IMDb -------------------------------------------
 
-def download_poster(title, info=None):
+def download_poster(title, info=None, force=False):
     """
     Download the IMDb poster for `title` into settings.poster_path/<title>.jpg.
-    Returns the saved path, or None if unavailable. Skips if already present.
+    Returns the saved path, or None if unavailable. Skips if already present,
+    unless `force` is True (then it re-downloads and overwrites).
     """
-    dest = Path(settings.poster_path) / f"{title}.jpg"
-    if dest.exists():
+    dest = project_path(settings.poster_path) / f"{title}.jpg"
+    if dest.exists() and not force:
         return dest
     if info is None:
         info = omdb_client.lookup_title(title)

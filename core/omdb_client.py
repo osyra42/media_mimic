@@ -13,15 +13,14 @@ Get a free key at https://www.omdbapi.com/apikey.aspx and put it in settings.py:
 """
 
 import json
-import os
 import urllib.parse
 import urllib.request
-from pathlib import Path
 
 import settings
+from paths import project_path
 
 API_URL = "https://www.omdbapi.com/"
-CACHE_PATH = Path(__file__).parent / "_cache" / "omdb_cache.json"
+CACHE_PATH = project_path("_cache") / "omdb_cache.json"
 
 
 class OMDbError(Exception):
@@ -56,9 +55,11 @@ def _save_cache(cache):
 _cache = _load_cache()
 
 
-def _request(params, cache_key):
-    """Make a cached OMDb request. Returns the parsed JSON dict."""
-    if cache_key in _cache:
+def _request(params, cache_key, force=False):
+    """Make a cached OMDb request. Returns the parsed JSON dict.
+    When `force` is True, bypass the cached value and re-fetch from the API
+    (the fresh result still overwrites the cache)."""
+    if not force and cache_key in _cache:
         return _cache[cache_key]
 
     query = dict(params)
@@ -85,8 +86,20 @@ def clean_title(name):
     """
     Strip common release-folder cruft so a directory name matches IMDb.
     e.g. 'American Dad (2005) [1080p]' -> 'American Dad'
+
+    If the raw folder name has an entry in title_overrides, that exact query
+    string is used instead (handles apostrophes, '&', and alternate titles
+    that folder names can't represent).
     """
     import re
+
+    try:
+        import title_overrides
+        override = title_overrides.OVERRIDES.get(name.strip())
+        if override:
+            return override
+    except ImportError:
+        pass
 
     name = re.sub(r"\[[^\]]*\]", "", name)          # [1080p], [DUB]
     name = re.sub(r"\([^)]*\)", "", name)            # (2005)
@@ -95,18 +108,27 @@ def clean_title(name):
     return " ".join(name.split()).strip()
 
 
-def lookup_title(name, kind=None):
+def lookup_title(name, kind=None, force=False):
     """
     Look up a movie/series by title name. Returns the OMDb detail dict
     (includes imdbID, imdbRating, Runtime, Poster, Type, totalSeasons, ...).
     `kind` can be 'movie' or 'series' to disambiguate.
+    `force` re-fetches from the API even if a cached value exists.
     """
     title = clean_title(name)
     params = {"t": title, "plot": "short"}
     if kind:
         params["type"] = kind
     cache_key = f"t::{title}::{kind or ''}"
-    return _request(params, cache_key)
+    return _request(params, cache_key, force=force)
+
+
+def cached_info(name, kind=None):
+    """Return the cached OMDb dict for `name` WITHOUT any network call, or
+    None if it hasn't been fetched yet. Used by the GUI to render cards from
+    already-fetched data."""
+    title = clean_title(name)
+    return _cache.get(f"t::{title}::{kind or ''}")
 
 
 def get_season(imdb_id, season):
