@@ -18,10 +18,16 @@ import json
 import sys
 from pathlib import Path
 
+# Allow running as `python core/enrich.py` from anywhere: put both this dir
+# (for sibling modules) and the project root (for settings.py) on the path.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import library
 import omdb_client
+from paths import project_path
 
-REPORT_PATH = Path(__file__).parent / "_cache" / "report.json"
+REPORT_PATH = project_path("_cache") / "report.json"
 
 
 def process(category, title, title_path):

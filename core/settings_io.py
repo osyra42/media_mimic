@@ -7,9 +7,10 @@ value portion of each top-level ``name = value`` line.
 
 import ast
 import re
-from pathlib import Path
 
-SETTINGS_FILE = Path(__file__).with_name("settings.py")
+from paths import project_path
+
+SETTINGS_FILE = project_path("settings.py")
 
 # Matches a top-level assignment like:  name = <value>   # optional comment
 # Group 1 = leading name and equals (kept verbatim), group "val" = value text.
