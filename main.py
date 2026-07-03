@@ -3,12 +3,85 @@ import subprocess
 import psutil
 import os
 import time
+import tkinter as tk
+from tkinter import ttk
 from pathlib import Path
 from PySide6.QtWidgets import QApplication, QPushButton, QVBoxLayout, QHBoxLayout, QWidget, QMessageBox, QLabel, QGridLayout, QScrollArea
 from PySide6.QtGui import QPixmap, QIcon
 from PySide6.QtCore import Qt, QCoreApplication, QSize
 
 import settings
+
+
+class SplashProgress:
+    """A small Tkinter loading window with a progress bar, showing the
+    current category and title as the media library is scanned."""
+
+    def __init__(self, total):
+        self.root = tk.Tk()
+        self.root.title(settings.window_title)
+        self.root.configure(bg="#3c3c3c")  # slight gray background
+        self.root.geometry("460x150")
+        self.root.resizable(False, False)
+
+        icon_path = Path(settings.app_icon)
+        if icon_path.exists():
+            try:
+                self.root.iconphoto(True, tk.PhotoImage(file=str(icon_path)))
+            except tk.TclError:
+                pass
+
+        # Center the window on screen
+        self.root.update_idletasks()
+        w, h = 460, 150
+        x = (self.root.winfo_screenwidth() - w) // 2
+        y = (self.root.winfo_screenheight() - h) // 2
+        self.root.geometry(f"{w}x{h}+{x}+{y}")
+
+        style = ttk.Style(self.root)
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+        style.configure(
+            "Splash.Horizontal.TProgressbar",
+            troughcolor="#2a2a2a",
+            background="#6ea0ff",
+            bordercolor="#3c3c3c",
+        )
+
+        self.progress = ttk.Progressbar(
+            self.root,
+            style="Splash.Horizontal.TProgressbar",
+            orient="horizontal",
+            length=400,
+            mode="determinate",
+            maximum=max(1, total),
+        )
+        self.progress.pack(pady=(24, 16))
+
+        self.category_label = tk.Label(
+            self.root, text="", bg="#3c3c3c", fg="#e0e0e0",
+            font=("Segoe UI", 11, "bold"),
+        )
+        self.category_label.pack()
+
+        self.title_label = tk.Label(
+            self.root, text="", bg="#3c3c3c", fg="#b0b0b0",
+            font=("Segoe UI", 9),
+        )
+        self.title_label.pack(pady=(4, 0))
+
+        self.root.update()
+
+    def update(self, category, title):
+        self.category_label.config(text=category)
+        self.title_label.config(text=title)
+        self.progress["value"] += 1
+        self.root.update()
+
+    def close(self):
+        self.root.destroy()
 
 class MediaMimicApp(QWidget):
     def __init__(self):
@@ -34,12 +107,6 @@ class MediaMimicApp(QWidget):
         layout.addWidget(self.scroll_area)
         self.setLayout(layout)
         
-        icon_path = Path(settings.app_icon)
-        if icon_path.exists():
-            self.setWindowIcon(QIcon(str(icon_path)))
-        else:
-            print(f"Icon not found at: {icon_path}")
-
         # Store category data
         self.categories = []
 
@@ -49,17 +116,26 @@ class MediaMimicApp(QWidget):
         # Connect the resize event
         self.resizeEvent = self.on_resize
 
+    def _is_visible_dir(self, base, name):
+        return (os.path.isdir(os.path.join(base, name))
+                and not name.startswith(tuple(settings.blacklisted_starting_characters))
+                and name not in settings.blacklisted_directories)
+
     def create_buttons(self):
         if os.path.exists(self.directory_path) and os.path.isdir(self.directory_path):
             directories = [d for d in os.listdir(self.directory_path)
-                        if os.path.isdir(os.path.join(self.directory_path, d))
-                        and not d.startswith(tuple(settings.blacklisted_starting_characters))
-                        and d not in settings.blacklisted_directories]
+                           if self._is_visible_dir(self.directory_path, d)]
+
+            # Count total titles up front so the progress bar is determinate
+            total_titles = 0
+            for category in directories:
+                cat_path = os.path.join(self.directory_path, category)
+                total_titles += sum(1 for s in os.listdir(cat_path)
+                                    if self._is_visible_dir(cat_path, s))
+
+            splash = SplashProgress(total_titles)
 
             for category in directories:
-                print(f"LOOKN | In Category {category} . . .")
-                time.sleep(0.15)
-
                 # Create a header label for the category
                 header_label = QLabel(category, self)
                 header_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -73,16 +149,12 @@ class MediaMimicApp(QWidget):
                 buttons = []
 
                 # Get the list of series titles within the category directory
-                series_titles = [
-                    s for s in os.listdir(os.path.join(self.directory_path, category))
-                    if os.path.isdir(os.path.join(self.directory_path, category, s))
-                    and not s.startswith(tuple(settings.blacklisted_starting_characters))
-                    and s not in settings.blacklisted_directories
-                ]
+                cat_path = os.path.join(self.directory_path, category)
+                series_titles = [s for s in os.listdir(cat_path)
+                                 if self._is_visible_dir(cat_path, s)]
 
                 for title in series_titles:
-                    print(f"FOUND | {title}")
-                    time.sleep(0.005)
+                    splash.update(category, title)
 
                     # Create a button for each title
                     button = QPushButton(self)
@@ -124,6 +196,8 @@ class MediaMimicApp(QWidget):
 
                 # Add some spacing between categories
                 self.main_layout.addSpacing(20)
+
+            splash.close()
 
         # Initial layout adjustment
         self.adjust_grid_layout()
@@ -186,9 +260,33 @@ class MediaMimicApp(QWidget):
             print(f"DEBUG: Error occurred: {e}")
 
 if __name__ == "__main__":
+    # Under pythonw.exe (no console) sys.stdout/stderr are None, so any print()
+    # would raise. Redirect them to a null sink so debug prints are harmless.
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w")
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w")
+
     app = QApplication(sys.argv)
 
+    # Set the application icon (taskbar + all windows). On Windows, an explicit
+    # AppUserModelID is needed for the taskbar to pick up our icon rather than
+    # python.exe's default one.
+    icon_path = Path(settings.app_icon)
+    if icon_path.exists():
+        app.setWindowIcon(QIcon(str(icon_path)))
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+                    "mediamimic.app"
+                )
+            except Exception as e:
+                print(f"Could not set AppUserModelID: {e}")
+    else:
+        print(f"Icon not found at: {icon_path}")
+
     window = MediaMimicApp()
-    window.show()
+    window.showMaximized()
 
     sys.exit(app.exec())
