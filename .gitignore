@@ -1,6 +1,8 @@
 settings.py
 posters/*
 !posters/#put_posters_here
+ff*.exe
 
 venv
 __pycache__
+_cache

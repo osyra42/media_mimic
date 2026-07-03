@@ -1,0 +1,288 @@
+/* === Base === */
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: Consolas, monospace;
+  max-width: 850px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* === Title Row === */
+.title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+h1 {
+  font-weight: 600;
+  font-size: 32px;
+  margin: 0;
+  color: var(--text-strong);
+}
+
+#version {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.clear-btn {
+  font-size: 11px;
+  padding: 2px 8px;
+  width: auto;
+  flex: none;
+  border: 1px solid var(--border);
+  background-color: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.clear-btn:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.legend {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* === Textarea === */
+textarea {
+  background-color: var(--bg-elevated);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  box-sizing: border-box;
+  resize: vertical;
+  transition: border-color 0.2s ease;
+}
+
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* === Buttons === */
+.button-bar {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0 20px;
+}
+
+button {
+  background-color: var(--bg-button);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 8px 20px;
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex: 1;
+}
+
+button:hover {
+  background-color: var(--border);
+  border-color: var(--border-strong);
+}
+
+button:active {
+  background-color: var(--bg-button-active);
+  transform: scale(0.98);
+}
+
+/* === Status Counts === */
+.status-counts {
+  flex: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 20px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.status-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-sep {
+  color: var(--border);
+}
+
+/* === Form / Rows === */
+#form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dot-group {
+  display: flex;
+  align-items: center;
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 4px;
+  position: relative;
+  transition: background-color 0.15s ease;
+}
+
+.dot-group:hover {
+  background-color: var(--bg-hover);
+}
+
+/* === Radio Buttons === */
+input[type="radio"] {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  display: none;
+}
+
+input[type="radio"] + label {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  line-height: 20px;
+  text-align: center;
+  margin-right: 5px;
+  padding: 5px;
+  padding-right: 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+input[type="radio"] + label:hover {
+  background-color: var(--accent-soft);
+}
+
+input[type="radio"]:checked + label {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.flag-none-label {
+  color: var(--bg-elevated);
+}
+
+/* === Separator === */
+.flag-dot-separator {
+  color: var(--border);
+  margin: 0 4px;
+}
+
+/* === Text Content === */
+.dot-group-text {
+  margin-left: 10px;
+  flex-grow: 1;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+input[type="text"].dot-group-text {
+  background-color: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-family: inherit;
+  font-size: 13px;
+  transition: border-color 0.2s ease;
+}
+
+input[type="text"].dot-group-text:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+/* === Extra (seasons/episodes/movie id) === */
+.dot-group-extra {
+  margin-left: 8px;
+  flex: 0 0 80px;
+  width: 80px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+input[type="text"].dot-group-extra {
+  background-color: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-family: inherit;
+  font-size: 13px;
+  transition: border-color 0.2s ease;
+}
+
+input[type="text"].dot-group-extra:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+/* === Row actions === */
+.row-actions {
+  position: absolute;
+  left: 100%;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  padding-left: 6px;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.dot-group:hover .row-actions {
+  opacity: 1;
+}
+
+.row-action {
+  flex: 0 0 auto;
+  width: auto;
+  padding: 2px 6px;
+  font-size: 12px;
+  line-height: 1;
+  text-align: center;
+  text-decoration: none;
+  color: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.row-action:hover {
+  background-color: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.row-action-delete:hover {
+  background-color: rgba(220, 80, 80, 0.2);
+  border-color: #dc5050;
+}
