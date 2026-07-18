@@ -60,7 +60,7 @@ Osyra/media_mimic/
 ├── main.py                 # Entry point, Qt GUI, card grid, detail panels
 ├── requirements.txt        # Python deps (pinned)
 ├── settings.py.example     # Example config — copy to settings.py
-├── zen_launcher.bat        # Windows launcher: venv check, pythonw.exe, detach
+├── zzz_launcher.bat        # Windows launcher: venv check, pythonw.exe, detach
 ├── core/
 │   ├── paths.py            # Project-root-relative Path helper
 │   ├── library.py          # Scan titles, posters, ratings, watch time, episode audit
@@ -109,24 +109,13 @@ Osyra/media_mimic/
 ### 1. Clone
 
 ```bash
-git clone https://github.com/KastienDevOp/media_mimic.git
+git clone https://github.com/osyra42/media_mimic.git
 cd media_mimic
 ```
 
 ### 2. Set Up Virtual Environment
 
 ```bash
-A desktop launcher for your local media library. Browse titles as theater-style
-cards enriched with IMDb data (via OMDb), then hand playback off to VLC.
-
-## Run
-
-Double-click `zzz_launcher.bat`. It checks the venv, Python version, and
-dependencies, then starts the app windowless.
-
-## First-time setup
-
-```
 python -m venv venv
 venv\Scripts\pip install -r requirements.txt
 ```
@@ -164,7 +153,7 @@ omdb_api_key = "YOUR_OMDB_KEY_HERE"          # <-- free tier at omdbapi.com
 
 Option A — launcher (recommended):
 ```bash
-zen_launcher.bat
+zzz_launcher.bat
 ```
 
 Option B — manual:
@@ -274,21 +263,3 @@ Open a PR against `main`.
 ## License
 
 MIT — use it, break it, fix it however you want.
-Copy `settings.py.example` to `settings.py` and set `media_path`, and your OMDb
-API key (free at https://www.omdbapi.com/apikey.aspx).
-
-## Usage
-
-- **Search** — filter titles from the bar at the top.
-- **Click a card** — opens the detail view with a Play button.
-- **⚙ Settings** — edit settings, open the Collection Tool, and fetch online
-  data (posters, ratings, watch time, episodes).
-
-Playback requires VLC to be open.
-
-## Layout
-
-- `main.py` — the app
-- `core/` — library scan, OMDb client, settings I/O
-- `assets/` — icon, default poster
-- `posters/`, `_cache/` — downloaded posters and OMDb cache
